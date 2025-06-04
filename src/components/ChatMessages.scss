@@ -1,0 +1,115 @@
+.chat-messages {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 40px;
+  
+  .message {
+    display: flex;
+    flex-direction: column;
+    
+    &.user {
+      align-items: flex-end;
+      
+      .message-content {
+        background-color: rgba(60, 238, 196, 0.5); /* 3CEEC4 with 50% transparency */
+        color: #ffffff;
+        max-width: 70%;
+        border-radius: 20px 20px 4px 20px;
+        align-self: flex-end;
+      }
+      
+      .message-time {
+        text-align: right;
+        margin-right: 8px;
+      }
+    }
+    
+    &.assistant {
+      align-items: flex-start;
+      
+      .message-content {
+        background-color: #2E2E2E;
+        color: #ffffff;
+        max-width: 80%;
+        border-radius: 20px 20px 20px 4px;
+        align-self: flex-start;
+      }
+      
+      .message-time {
+        text-align: left;
+        margin-left: 8px;
+      }
+    }
+    
+    .message-content {
+      padding: 16px 20px;
+      font-size: 16px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .message-time {
+      font-size: 12px;
+      color: #8f8f8f;
+      margin-top: 6px;
+    }
+  }
+  
+  .thinking-message {
+    display: flex;
+    margin: 8px 0;
+    
+    &.left-aligned {
+      justify-content: flex-start;
+    }
+    
+    .thinking-text {
+      font-size: 14px;
+      color: #8f8f8f;
+      font-style: italic;
+      
+      &.completed {
+        color: #8f8f8f;
+        opacity: 0.7;
+        animation: fadeIn 0.3s ease-in;
+      }
+    }
+  }
+  
+  .thinking-dots {
+    display: inline-block;
+    
+    .dot {
+      display: inline-block;
+      opacity: 0;
+      animation: dotFade 1.4s infinite;
+      
+      &:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      
+      &:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+    }
+  }
+}
+
+@keyframes dotFade {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.7;
+  }
+}

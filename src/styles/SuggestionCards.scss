@@ -1,0 +1,21 @@
+.suggestion-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  width: 100%;
+  max-width: 800px;
+  
+  .suggestion-card {
+    background-color: #1f1f1f;
+    border-radius: 15px;
+    padding: 20px;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    
+    &:hover {
+      background-color: #3ceec4;
+      color: #111111;
+    }
+  }
+}

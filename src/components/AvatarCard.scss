@@ -1,0 +1,86 @@
+.avatar-card {
+  width: 28.57%; /* 2/7 of total width (2:5 ratio) */
+  min-width: 280px; /* Minimum width to ensure usability */
+  background-image: url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/DL_Design_Page__External_-sTQH4wiawnpb5N9x4VjGhltCeSXU5S.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  
+  .avatar-card-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 15px;
+    
+    .back-button, .toggle-avatar-button {
+      background: #4A4A4A;
+      border: 1px solid #4A4A4A;
+      color: #ffffff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: 64px;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        color: #3ceec4;
+        background-color: rgba(60, 238, 196, 0.1);
+        border-color: rgba(60, 238, 196, 0.3);
+      }
+      
+      svg {
+        flex-shrink: 0;
+      }
+    }
+    
+    .back-button {
+      padding: 8px;
+      
+      svg {
+        width: 20px;
+        height: 20px;
+      }
+    }
+  }
+  
+  .avatar-background {
+    flex: 1;
+    min-height: 380px;
+    position: relative;
+  }
+  
+  .avatar-info {
+    padding: 15px 20px;
+    text-align: center;
+    position: relative;
+    
+    &:before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 20px;
+      right: 20px;
+      height: 1px;
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .avatar-name {
+      color: #3ceec4;
+      font-size: 24px;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+    
+    .avatar-title {
+      color: #8f8f8f;
+      font-size: 16px;
+    }
+  }
+}

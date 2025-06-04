@@ -1,0 +1,27 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background-color: #111111;
+  border-bottom: 1px solid #262626;
+  height: 60px; /* Set a fixed height for the header */
+  
+  .logo {
+    margin-left: 3px; /* Move logo to the right by 3px */
+    
+    .logo-image {
+      height: 14.4px; /* Shrunk to 80% of 18px (18 * 0.8 = 14.4px) */
+      width: auto;
+    }
+  }
+  
+  .user-profile {
+    .user-avatar {
+      width: 45px; /* Enlarged by 2.5 times (18px * 2.5 = 45px) */
+      height: 45px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+  }
+}
