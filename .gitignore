@@ -1,7 +1,5 @@
 node_modules
 backend/venv
-<<<<<<< Updated upstream
+backend/__pycache__
 backend/.env
-=======
-backend/.env
->>>>>>> Stashed changes
+.next
