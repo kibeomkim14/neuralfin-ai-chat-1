@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
     echo "Virtual environment not found. Running setup..."

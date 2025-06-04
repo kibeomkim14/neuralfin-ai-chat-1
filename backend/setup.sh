@@ -1,3 +1,5 @@
+#!/bin/bash
+
 echo "Setting up NEURALFIN.AI Python Backend..."
 
 # Check if Python 3 is installed

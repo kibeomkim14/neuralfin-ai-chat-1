@@ -5,6 +5,7 @@ import "../src/App.scss"
 export const metadata: Metadata = {
   title: "NEURALFIN.AI - Financial Advisor",
   description: "AI-powered financial advisory chat interface",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -18,3 +19,6 @@ export default function RootLayout({
     </html>
   )
 }
+
+
+import './globals.css'
