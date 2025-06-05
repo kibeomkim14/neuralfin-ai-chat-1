@@ -54,6 +54,49 @@
     flex: 1;
     min-height: 380px;
     position: relative;
+    
+    // Xiaoice Avatar Container
+    .xiaoice-avatar-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      pointer-events: none; // Allow clicks to pass through to background
+      
+      // Override any SDK styles that might interfere
+      * {
+        border-radius: 0 !important;
+      }
+    }
+    
+    // Avatar Status Indicator
+    .avatar-status {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 6px 12px;
+      border-radius: 20px;
+      z-index: 3;
+      
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+      }
+      
+      .status-text {
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 500;
+      }
+    }
   }
   
   .avatar-info {
@@ -82,5 +125,17 @@
       color: #8f8f8f;
       font-size: 16px;
     }
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
   }
 }
