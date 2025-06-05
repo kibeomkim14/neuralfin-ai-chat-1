@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
+import xiaoiceManager, { type XiaoiceStatus } from "../utils/xiaoiceManager"
 import "./AvatarCard.scss"
 
 interface AvatarCardProps {
@@ -8,108 +9,61 @@ interface AvatarCardProps {
 }
 
 const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
-  const [avatarStatus, setAvatarStatus] = useState<"initializing" | "ready" | "error" | "offline">("offline")
-  const [rtcInstance, setRtcInstance] = useState<any>(null)
+  const [avatarStatus, setAvatarStatus] = useState<XiaoiceStatus>("offline")
+  const [debugInfo, setDebugInfo] = useState<string>("Click 'Start Avatar' to begin")
+  const avatarContainerRef = useRef<HTMLDivElement>(null)
+  const [userStarted, setUserStarted] = useState(false)
 
   useEffect(() => {
-    initializeAvatar()
+    // Initialize manager with options
+    xiaoiceManager.init({
+      subscriptionKey: process.env.NEXT_PUBLIC_XIAOICE_SUBSCRIPTION_KEY || "",
+      projectId: process.env.NEXT_PUBLIC_XIAOICE_PROJECT_ID || "",
+      mountSelector: ".xiaoice-avatar-mount",
+      includeUI: false,
+      showDefaultStaticImage: true,
+      highQuality: false,
+      onStatusChange: (status) => {
+        setAvatarStatus(status)
+      },
+      onDebugInfo: (info) => {
+        setDebugInfo(info)
+      },
+    })
+
     return () => {
-      // Cleanup on unmount
-      if (rtcInstance) {
-        rtcInstance.destroy()
-      }
+      xiaoiceManager.cleanup()
     }
   }, [])
 
-  const initializeAvatar = async () => {
-    if (typeof window === "undefined") return
-
-    setAvatarStatus("initializing")
-
-    try {
-      // Get environment variables
-      const subscriptionKey = process.env.NEXT_PUBLIC_XIAOICE_SUBSCRIPTION_KEY
-      const projectId = process.env.NEXT_PUBLIC_XIAOICE_PROJECT_ID
-
-      if (!subscriptionKey || !projectId) {
-        console.error("Missing Xiaoice credentials")
-        setAvatarStatus("error")
-        return
-      }
-
-      // Generate signature
-      const axios = (window as any).axios
-      if (!axios) {
-        console.error("Axios not loaded")
-        setAvatarStatus("error")
-        return
-      }
-
-      const signatureResponse = await axios({
-        url: "https://interactive-virtualhuman.xiaoice.com/openapi/signature/gen",
-        headers: {
-          "subscription-key": subscriptionKey,
-        },
-      })
-
-      const signature = signatureResponse.data.data
-
-      // Initialize RTC
-      const { RTCInteraction } = window as any
-      if (!RTCInteraction) {
-        console.error("RTCInteraction not loaded")
-        setAvatarStatus("error")
-        return
-      }
-
-      const options = {
-        mountClass: ".xiaoice-avatar-container",
-        includeUI: false,
-        showDefaultStaticImage: false,
-        bitrateEnum: "R_720P",
-        projectId: projectId,
-        signature: signature,
-        onError: (res: any) => {
-          console.error("Xiaoice Error:", res)
-          setAvatarStatus("error")
-        },
-        onInited: (res: any) => {
-          console.log("Xiaoice Initialized:", res)
-          setAvatarStatus("ready")
-          // Start RTC automatically
-          if (rtcInstance) {
-            rtcInstance.startRTC()
-          }
-        },
-        onPlayStream: () => {
-          console.log("Avatar stream started")
-        },
-        onJoinRoom: () => {
-          console.log("Avatar joined room")
-        },
-        onTalkStart: (res: any) => {
-          console.log("Avatar started talking:", res)
-        },
-        onTalkEnd: (res: any) => {
-          console.log("Avatar finished talking:", res)
-        },
-      }
-
-      const instance = new RTCInteraction(options)
-      setRtcInstance(instance)
-
-      // Make instance globally available for chat store
-      ;(window as any).xiaoiceInstance = instance
-    } catch (error) {
-      console.error("Failed to initialize avatar:", error)
-      setAvatarStatus("error")
+  // Step 1: Initialize RTC
+  const handleStartAvatar = async () => {
+    if (userStarted || avatarStatus === "initializing") {
+      return
     }
+
+    console.info("User manually started avatar", "AvatarCard")
+    setUserStarted(true)
+    await xiaoiceManager.startInitialization()
+  }
+
+  // Step 2: Start RTC
+  const handleStartRTC = () => {
+    xiaoiceManager.startRTC()
+  }
+
+  const handleRetry = () => {
+    console.info("Retrying avatar initialization", "AvatarCard")
+    setUserStarted(false)
+    xiaoiceManager.cleanup()
   }
 
   const getStatusColor = () => {
     switch (avatarStatus) {
       case "ready":
         return "#3ceec4"
+      case "initialized":
+        return "#ffa500"
       case "initializing":
         return "#ffa500"
       case "error":
@@ -123,10 +77,12 @@ const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
     switch (avatarStatus) {
       case "ready":
         return "Live"
+      case "initialized":
+        return "Ready"
       case "initializing":
         return "Connecting..."
       case "error":
-        return "Offline"
+        return "Error"
       default:
         return "Offline"
     }
@@ -163,14 +119,62 @@ const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
       </div>
 
       <div className="avatar-background">
-        {/* Xiaoice Avatar Container */}
-        <div className="xiaoice-avatar-container"></div>
+        <div className="xiaoice-avatar-container" ref={avatarContainerRef}>
+          <div className="xiaoice-avatar-mount"></div>
 
-        {/* Avatar Status Indicator */}
+          {/* Show Start Button when offline */}
+          {!userStarted && avatarStatus === "offline" && (
+            <div className="avatar-overlay">
+              <div className="avatar-placeholder">
+                <div className="placeholder-text">Avatar Ready to Start</div>
+                <button className="start-avatar-button" onClick={handleStartAvatar}>
+                  Start Avatar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Show loading when initializing */}
+          {userStarted && avatarStatus === "initializing" && (
+            <div className="avatar-overlay">
+              <div className="avatar-placeholder">
+                <div className="loading-spinner"></div>
+                <div className="placeholder-text">Initializing...</div>
+              </div>
+            </div>
+          )}
+
+          {/* Show Start RTC button when initialized but not started */}
+          {userStarted && avatarStatus === "initialized" && (
+            <div className="avatar-overlay">
+              <div className="avatar-placeholder">
+                <div className="placeholder-text">RTC Initialized</div>
+                <button className="start-avatar-button" onClick={handleStartRTC}>
+                  Start RTC
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Show error state */}
+          {userStarted && avatarStatus === "error" && (
+            <div className="avatar-overlay">
+              <div className="avatar-placeholder error">
+                <div className="placeholder-text">Connection Failed</div>
+                <button className="retry-button" onClick={handleRetry}>
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="avatar-status">
           <div className="status-dot" style={{ backgroundColor: getStatusColor() }}></div>
           <span className="status-text">{getStatusText()}</span>
         </div>
+
+        {process.env.NODE_ENV === "development" && debugInfo && <div className="debug-info">{debugInfo}</div>}
       </div>
 
       <div className="avatar-info">

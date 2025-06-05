@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import xiaoiceManager from "../utils/xiaoiceManager"
 
 export interface Message {
   id: string
@@ -40,32 +41,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
       timestamp: new Date(),
       ...(thinkingDuration && { thinkingDuration }),
     }
+    console.debug(`Adding ${role} message`, "ChatStore", { messageId: newMessage.id, length: content.length })
     set((state) => ({
       messages: [...state.messages, newMessage],
     }))
   },
 
   setIsTyping: (typing) => set({ isTyping: typing }),
-
   setShowAvatar: (show) => set({ showAvatar: show }),
-
   toggleAvatar: () => set((state) => ({ showAvatar: !state.showAvatar })),
-
   setInputValue: (value) => set({ inputValue: value }),
+  clearMessages: () => {
+    console.info("Clearing all messages", "ChatStore")
+    set({ messages: [] })
+  },
 
-  clearMessages: () => set({ messages: [] }),
-
-  startThinking: () =>
-    set({
+  startThinking: () => {
+    console.debug("Starting thinking timer", "ChatStore")
+    return set({
       thinkingStartTime: Date.now(),
       isTyping: true,
-    }),
+    })
+  },
 
   stopThinking: () => {
     const { thinkingStartTime } = get()
     let duration = 0
     if (thinkingStartTime) {
       duration = Math.round((Date.now() - thinkingStartTime) / 1000)
+      console.debug(`Stopping thinking timer: ${duration}s`, "ChatStore")
     }
     set({
       isTyping: false,
@@ -79,14 +83,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (!message.trim()) return
 
-    console.log("Sending message:", message)
+    // Check if avatar is ready using the manager
+    const avatarReady = xiaoiceManager.isXiaoiceReady()
+    console.info("Sending message to backend", "ChatStore", {
+      messageLength: message.length,
+      avatarReady,
+    })
 
-    // Add user message
     addMessage(message, "user")
     startThinking()
 
     try {
-      // Prepare conversation history
       const conversationMessages = messages
         .map((msg) => ({
           role: msg.role,
@@ -94,9 +101,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }))
         .concat([{ role: "user", content: message }])
 
-      console.log("Conversation messages:", conversationMessages)
-
-      // Call Python backend
       const response = await fetch("http://localhost:8000/api/chat/stream", {
         method: "POST",
         headers: {
@@ -108,42 +112,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }),
       })
 
-      console.log("Response status:", response.status)
-
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("API Error:", errorText)
         throw new Error(`API Error: ${response.status} - ${errorText}`)
       }
 
       const reader = response.body?.getReader()
-      if (!reader) throw new Error("No response body")
+      if (!reader) {
+        throw new Error("No response body")
+      }
 
       let assistantMessage = ""
       const thinkingDuration = stopThinking()
-
-      // Add empty assistant message that we'll update
       addMessage("", "assistant", thinkingDuration)
 
-      // Read the stream
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
         const chunk = new TextDecoder().decode(value)
-        console.log("Received chunk:", chunk)
-
         const lines = chunk.split("\n")
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6))
-              console.log("Parsed data:", data)
-
               if (data.type === "text-delta") {
                 assistantMessage += data.textDelta
-                // Update the last message
                 set((state) => ({
                   messages: state.messages.map((msg, index) =>
                     index === state.messages.length - 1 ? { ...msg, content: assistantMessage } : msg,
@@ -153,15 +148,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 throw new Error(data.error)
               }
             } catch (e) {
-              console.log("Parse error for line:", line, e)
+              console.error("Parse error for line", "ChatStore", { line, error: e })
             }
           }
         }
       }
 
-      console.log("Final assistant message:", assistantMessage)
+      // Use the manager to make avatar talk
+      if (avatarReady && assistantMessage) {
+        try {
+          console.info("Sending message to avatar", "ChatStore", {
+            messageLength: assistantMessage.length,
+          })
+
+          // Add a small delay to ensure the message is fully rendered
+          setTimeout(() => {
+            xiaoiceManager.talk(assistantMessage)
+          }, 500)
+        } catch (error) {
+          console.error("Error sending message to avatar", "ChatStore", error)
+        }
+      }
     } catch (error) {
-      console.error("Error sending message:", error)
+      console.error("Error sending message", "ChatStore", error)
       const thinkingDuration = stopThinking()
       addMessage(
         `I apologize, but I'm having trouble connecting right now. Error: ${error instanceof Error ? error.message : "Unknown error"}`,
