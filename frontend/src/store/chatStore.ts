@@ -30,7 +30,7 @@ interface ChatState {
   breakAvatarTalking: () => void
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
