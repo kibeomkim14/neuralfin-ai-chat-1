@@ -1,7 +1,8 @@
 import { create } from "zustand"
 import xiaoiceManager from "../utils/xiaoiceManager"
+import { endpoints, type Message, type ChatRequest, type StreamResponse } from "../lib/api"
 
-export interface Message {
+export interface ChatMessage {
   id: string
   content: string
   role: "user" | "assistant"
@@ -10,12 +11,12 @@ export interface Message {
 }
 
 interface ChatState {
-  messages: Message[]
+  messages: ChatMessage[]
   isTyping: boolean
   showAvatar: boolean
   inputValue: string
   thinkingStartTime: number | null
-  isAvatarTalking: boolean // New state for avatar talking
+  isAvatarTalking: boolean
   addMessage: (content: string, role: "user" | "assistant", thinkingDuration?: number) => void
   setIsTyping: (typing: boolean) => void
   setShowAvatar: (show: boolean) => void
@@ -29,6 +30,8 @@ interface ChatState {
   breakAvatarTalking: () => void
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isTyping: false,
@@ -38,7 +41,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isAvatarTalking: false,
 
   addMessage: (content, role, thinkingDuration) => {
-    const newMessage: Message = {
+    const newMessage: ChatMessage = {
       id: Date.now().toString(),
       content,
       role,
@@ -111,22 +114,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     startThinking()
 
     try {
-      const conversationMessages = messages
+      const conversationMessages: Message[] = messages
         .map((msg) => ({
           role: msg.role,
           content: msg.content,
         }))
         .concat([{ role: "user", content: message }])
 
-      const response = await fetch("http://localhost:8000/api/chat/stream", {
+      const request: ChatRequest = {
+        messages: conversationMessages,
+      }
+
+      const response = await fetch(`${API_BASE_URL}${endpoints.chat.stream}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "text/plain",
         },
-        body: JSON.stringify({
-          messages: conversationMessages,
-        }),
+        body: JSON.stringify(request),
       })
 
       if (!response.ok) {
@@ -153,15 +158,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             try {
-              const data = JSON.parse(line.slice(6))
-              if (data.type === "text-delta") {
+              const data = JSON.parse(line.slice(6)) as StreamResponse
+              if (data.type === "text-delta" && data.textDelta) {
                 assistantMessage += data.textDelta
                 set((state) => ({
                   messages: state.messages.map((msg, index) =>
                     index === state.messages.length - 1 ? { ...msg, content: assistantMessage } : msg,
                   ),
                 }))
-              } else if (data.type === "error") {
+              } else if (data.type === "error" && data.error) {
                 throw new Error(data.error)
               }
             } catch (e) {

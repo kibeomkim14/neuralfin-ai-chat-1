@@ -1,4 +1,4 @@
 node_modules
 backend/venv
 backend/.env
-.next
+frontend/.next
