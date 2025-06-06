@@ -15,6 +15,7 @@ interface ChatState {
   showAvatar: boolean
   inputValue: string
   thinkingStartTime: number | null
+  isAvatarTalking: boolean // New state for avatar talking
   addMessage: (content: string, role: "user" | "assistant", thinkingDuration?: number) => void
   setIsTyping: (typing: boolean) => void
   setShowAvatar: (show: boolean) => void
@@ -24,6 +25,8 @@ interface ChatState {
   startThinking: () => void
   stopThinking: () => number
   sendMessage: (message: string) => Promise<void>
+  setIsAvatarTalking: (talking: boolean) => void
+  breakAvatarTalking: () => void
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -32,6 +35,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   showAvatar: true,
   inputValue: "",
   thinkingStartTime: null,
+  isAvatarTalking: false,
 
   addMessage: (content, role, thinkingDuration) => {
     const newMessage: Message = {
@@ -54,6 +58,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearMessages: () => {
     console.info("Clearing all messages", "ChatStore")
     set({ messages: [] })
+  },
+
+  setIsAvatarTalking: (talking) => {
+    console.debug(`Avatar talking state changed to ${talking}`, "ChatStore")
+    set({ isAvatarTalking: talking })
+  },
+
+  breakAvatarTalking: () => {
+    const success = xiaoiceManager.breakTalking()
+    if (success) {
+      console.info("Avatar talking interrupted by user", "ChatStore")
+      set({ isAvatarTalking: false })
+    }
   },
 
   startThinking: () => {

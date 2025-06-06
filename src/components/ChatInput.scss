@@ -27,7 +27,7 @@
       display: flex;
       gap: 10px;
       
-      .mic-button, .send-button {
+      .mic-button, .send-button, .pause-button {
         background: #4A4A4A;
         border: 1px solid #4A4A4A;
         color: #8f8f8f;
@@ -40,10 +40,27 @@
         border-radius: 64px;
         transition: all 0.2s ease;
         
-        &:hover {
+        &:hover:not(:disabled) {
           background-color: #3ceec4;
           color: #111111;
           border-color: #3ceec4;
+        }
+        
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      }
+      
+      .pause-button {
+        background-color: #ff6b6b;
+        border-color: #ff6b6b;
+        color: #ffffff;
+        
+        &:hover {
+          background-color: #ff5252;
+          border-color: #ff5252;
+          color: #ffffff;
         }
       }
     }

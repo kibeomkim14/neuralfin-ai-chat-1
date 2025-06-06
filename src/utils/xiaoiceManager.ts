@@ -1,6 +1,6 @@
 /**
  * XiaoiceManager - A utility to manage Xiaoice RTC and ASR integration
- * Based on the official demo code
+ * Based on the official demo code with enhanced error handling
  */
 
 
@@ -13,17 +13,24 @@ interface XiaoiceOptions {
   highQuality?: boolean
   onStatusChange?: (status: XiaoiceStatus) => void
   onDebugInfo?: (info: string) => void
+  onTalkingChange?: (isTalking: boolean) => void
 }
 
-export type XiaoiceStatus = "offline" | "initializing" | "initialized" | "ready" | "error"
+export type XiaoiceStatus = "offline" | "initializing" | "ready" | "error"
 
 class XiaoiceManager {
   private rtcInstance: any = null
   private asrInstance: any = null
   private status: XiaoiceStatus = "offline"
   private isReady = false
+  private isTalking = false
   private options: XiaoiceOptions | null = null
   private signature = ""
+  private lastSignatureTime = 0 // Track when signature was obtained
+  private signatureValidityMs = 30 * 60 * 1000 // 30 minutes validity
+  private initializationTimeout: NodeJS.Timeout | null = null
+  private retryCount = 0
+  private maxRetries = 3
   private asrConfig = {
     hotword_list: [],
     engine_model_type: "",
@@ -34,6 +41,7 @@ class XiaoiceManager {
     if (typeof window !== "undefined") {
       ;(window as any).xiaoiceManager = this
       ;(window as any).xiaoiceIsReady = () => this.isReady
+      ;(window as any).xiaoiceIsTalking = () => this.isTalking
     }
   }
 
@@ -44,8 +52,11 @@ class XiaoiceManager {
     this.options = options
     this.status = "offline"
     this.isReady = false
+    this.isTalking = false
     this.rtcInstance = null
     this.signature = ""
+    this.lastSignatureTime = 0
+    this.retryCount = 0
 
     console.info("Xiaoice manager initialized with options", "XiaoiceManager", options)
     this.updateStatus("offline")
@@ -62,26 +73,162 @@ class XiaoiceManager {
    * Check if Xiaoice is ready
    */
   public isXiaoiceReady(): boolean {
-    return this.isReady && !!this.rtcInstance
+    return this.isReady && !!this.rtcInstance && this.status === "ready"
   }
 
   /**
-   * Start the initialization process
-   * Step 1: Get signature and initialize RTC
+   * Check if avatar is currently talking
    */
-  public async startInitialization(): Promise<boolean> {
+  public isAvatarTalking(): boolean {
+    return this.isTalking
+  }
+
+  /**
+   * Check if signature is still valid
+   */
+  private isSignatureValid(): boolean {
+    if (!this.signature || !this.lastSignatureTime) {
+      return false
+    }
+    const now = Date.now()
+    return now - this.lastSignatureTime < this.signatureValidityMs
+  }
+
+  /**
+   * Get a fresh signature from the API
+   */
+  private async getFreshSignature(): Promise<string> {
+    if (!this.options) {
+      throw new Error("No options provided")
+    }
+
+    const axios = (window as any).axios
+    if (!axios) {
+      throw new Error("Axios not loaded")
+    }
+
+    this.debugLog("Getting fresh signature...")
+
+    try {
+      const signatureResponse = await axios({
+        method: "GET",
+        url: "https://interactive-virtualhuman.xiaoice.com/openapi/signature/gen",
+        headers: {
+          "subscription-key": this.options.subscriptionKey,
+        },
+        timeout: 10000, // 10 second timeout
+      })
+
+      if (!signatureResponse.data?.data) {
+        throw new Error("Invalid signature response")
+      }
+
+      this.signature = signatureResponse.data.data
+      this.lastSignatureTime = Date.now()
+      this.debugLog("Fresh signature obtained successfully")
+
+      return this.signature
+    } catch (error) {
+      console.error("Failed to get signature", "XiaoiceManager", error)
+      throw new Error(`Signature request failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+    }
+  }
+
+  /**
+   * Perform complete cleanup of all resources
+   */
+  private performCompleteCleanup(): void {
+    try {
+      this.debugLog("Performing complete cleanup...")
+
+      // Clear any timeouts
+      if (this.initializationTimeout) {
+        clearTimeout(this.initializationTimeout)
+        this.initializationTimeout = null
+      }
+
+      // Destroy RTC instance with all methods
+      if (this.rtcInstance) {
+        try {
+          // Try multiple cleanup methods to ensure complete destruction
+          if (typeof this.rtcInstance.endRTC === "function") {
+            this.rtcInstance.endRTC()
+          }
+          if (typeof this.rtcInstance.breakTalking === "function") {
+            this.rtcInstance.breakTalking()
+          }
+          if (typeof this.rtcInstance.destroy === "function") {
+            this.rtcInstance.destroy()
+          }
+        } catch (cleanupError) {
+          console.warn("Error during RTC cleanup", "XiaoiceManager", cleanupError)
+        }
+        this.rtcInstance = null
+      }
+
+      // Clean up ASR instance
+      if (this.asrInstance) {
+        try {
+          if (typeof this.asrInstance.stop === "function") {
+            this.asrInstance.stop()
+          }
+        } catch (asrError) {
+          console.warn("Error during ASR cleanup", "XiaoiceManager", asrError)
+        }
+        this.asrInstance = null
+      }
+
+      // Clear mount element
+      const mountElement = document.querySelector(this.options?.mountSelector || ".xiaoice-avatar-mount")
+      if (mountElement) {
+        mountElement.innerHTML = ""
+      }
+
+      // Clear global references
+      if (typeof window !== "undefined") {
+        delete (window as any).xiaoiceInstance
+        delete (window as any).xiaoiceIsReady
+        delete (window as any).xiaoiceIsTalking
+      }
+
+      // Reset all state
+      this.isReady = false
+      this.updateTalkingState(false)
+
+      this.debugLog("Complete cleanup finished")
+    } catch (error) {
+      console.error("Error during complete cleanup", "XiaoiceManager", error)
+    }
+  }
+
+  /**
+   * Start the complete initialization process and go directly to ready
+   */
+  public async startComplete(): Promise<boolean> {
     if (!this.options) {
       this.debugLog("No options provided")
       return false
     }
 
-    if (this.status !== "offline" && this.status !== "error") {
-      this.debugLog("Already initializing or ready")
+    if (this.status === "initializing") {
+      this.debugLog("Already initializing")
       return false
     }
 
+    // Always perform complete cleanup before starting
+    this.performCompleteCleanup()
+
     this.updateStatus("initializing")
-    this.debugLog("Starting initialization...")
+    this.debugLog(`Starting complete initialization (attempt ${this.retryCount + 1}/${this.maxRetries})...`)
+
+    // Set initialization timeout
+    this.initializationTimeout = setTimeout(() => {
+      if (this.status === "initializing") {
+        console.error("Initialization timeout", "XiaoiceManager")
+        this.debugLog("Initialization timed out after 30 seconds")
+        this.handleInitializationError(new Error("Initialization timeout"))
+      }
+    }, 30000) // 30 second timeout
 
     try {
       // Check if required objects are available
@@ -90,61 +237,57 @@ class XiaoiceManager {
       }
 
       const { RTCInteraction } = window as any
-      const axios = (window as any).axios
-
       if (!RTCInteraction) {
         throw new Error("RTCInteraction SDK not loaded")
       }
 
-      if (!axios) {
-        throw new Error("Axios not loaded")
-      }
+      // Always get a fresh signature for new initialization
+      await this.getFreshSignature()
 
-      // Get signature from API
-      this.debugLog("Getting signature...")
-      const signatureResponse = await axios({
-        method: "GET",
-        url: "https://interactive-virtualhuman.xiaoice.com/openapi/signature/gen",
-        headers: {
-          "subscription-key": this.options.subscriptionKey,
-        },
-      })
-
-      if (!signatureResponse.data?.data) {
-        throw new Error("Failed to get signature")
-      }
-
-      this.signature = signatureResponse.data.data
-      this.debugLog("Signature obtained, initializing RTC...")
-
-      // Clean up any existing instance
-      this.cleanup()
-
-      // Create options exactly like the demo
+      // Create RTC instance with enhanced error handling
       const rtcOptions = {
         mountClass: this.options.mountSelector,
         includeUI: !!this.options.includeUI,
         showDefaultStaticImage: !!this.options.showDefaultStaticImage,
-        bitrateEnum: this.options.highQuality ? "R_1080P" : "R_720P",
+        bitrateEnum: "R_1080P",
         projectId: this.options.projectId,
         signature: this.signature,
         onError: (res: any) => {
-          console.error("Xiaoice Error", "XiaoiceManager", res)
-          this.debugLog(`Error: ${JSON.stringify(res)}`)
-          this.updateStatus("error")
-          this.isReady = false
+          console.error("Xiaoice RTC Error", "XiaoiceManager", res)
+          this.debugLog(`RTC Error: ${JSON.stringify(res)}`)
+          this.handleInitializationError(new Error(`RTC Error: ${JSON.stringify(res)}`))
         },
         onInited: (res: any) => {
           console.info("Xiaoice Initialized", "XiaoiceManager", res)
-          this.debugLog("RTC initialized successfully")
-          this.updateStatus("initialized")
-          this.isReady = true
+          this.debugLog("RTC initialized successfully, starting stream...")
 
-          // Save ASR config from response (like demo)
+          // Clear initialization timeout
+          if (this.initializationTimeout) {
+            clearTimeout(this.initializationTimeout)
+            this.initializationTimeout = null
+          }
+
+          this.isReady = true
+          this.retryCount = 0 // Reset retry count on success
+
+          // Save ASR config from response
           this.asrConfig = {
             hotword_list: res?.hotword_list || [],
             engine_model_type: res?.engine_model_type || "",
           }
+
+          // Auto-start RTC after successful initialization
+          setTimeout(() => {
+            if (this.rtcInstance && this.isReady && this.status === "initializing") {
+              try {
+                this.rtcInstance.startRTC()
+                this.debugLog("Auto-starting RTC stream...")
+              } catch (error) {
+                console.error("Error auto-starting RTC", "XiaoiceManager", error)
+                this.handleInitializationError(error)
+              }
+            }
+          }, 1000) // Increased delay for better stability
         },
         onPlayStream: () => {
           console.info("Avatar stream started", "XiaoiceManager")
@@ -158,37 +301,89 @@ class XiaoiceManager {
         onStopStream: () => {
           console.info("Avatar stream stopped", "XiaoiceManager")
           this.debugLog("Stream stopped")
+          if (this.status === "ready") {
+            // If we were ready and stream stopped unexpectedly, it's an error
+            this.handleInitializationError(new Error("Stream stopped unexpectedly"))
+          }
         },
         onTalkStart: (res: any) => {
           console.info("Avatar started talking", "XiaoiceManager", res)
           this.debugLog("Avatar is speaking...")
+          this.updateTalkingState(true)
         },
         onTalkEnd: (res: any) => {
           console.info("Avatar finished talking", "XiaoiceManager", res)
           this.debugLog("Avatar finished speaking")
+          this.updateTalkingState(false)
         },
       }
 
       // Create RTC instance
-      console.debug("Creating RTCInteraction", "XiaoiceManager", rtcOptions)
+      console.debug("Creating RTCInteraction with fresh signature", "XiaoiceManager", {
+        ...rtcOptions,
+        signature: "***hidden***", // Don't log the actual signature
+      })
+
       this.rtcInstance = new RTCInteraction(rtcOptions)
 
       // Make instance globally available
       ;(window as any).xiaoiceInstance = this.rtcInstance
+      ;(window as any).xiaoiceIsReady = () => this.isReady
+      ;(window as any).xiaoiceIsTalking = () => this.isTalking
 
       return true
     } catch (error) {
-      console.error("Failed to initialize RTC", "XiaoiceManager", error)
-      this.debugLog(`Error: ${error instanceof Error ? error.message : "Unknown error"}`)
-      this.updateStatus("error")
-      this.isReady = false
+      this.handleInitializationError(error)
       return false
     }
   }
 
   /**
-   * Start RTC stream
-   * Step 2: Start RTC after initialization
+   * Handle initialization errors with retry logic
+   */
+  private handleInitializationError(error: any): void {
+    console.error("Initialization error", "XiaoiceManager", error)
+
+    // Clear initialization timeout
+    if (this.initializationTimeout) {
+      clearTimeout(this.initializationTimeout)
+      this.initializationTimeout = null
+    }
+
+    // Perform complete cleanup
+    this.performCompleteCleanup()
+
+    this.retryCount++
+
+    if (this.retryCount < this.maxRetries) {
+      this.debugLog(`Initialization failed, retrying in 3 seconds... (${this.retryCount}/${this.maxRetries})`)
+
+      // Auto-retry after a delay
+      setTimeout(() => {
+        if (this.status === "error" || this.status === "initializing") {
+          this.startComplete()
+        }
+      }, 3000)
+    } else {
+      this.debugLog(
+        `Initialization failed after ${this.maxRetries} attempts: ${error instanceof Error ? error.message : "Unknown error"}`,
+      )
+      this.updateStatus("error")
+      this.retryCount = 0 // Reset for next manual retry
+    }
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   * @deprecated Use startComplete() instead
+   */
+  public async startInitialization(): Promise<boolean> {
+    return this.startComplete()
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   * @deprecated This is now handled automatically in startComplete()
    */
   public startRTC(): boolean {
     if (!this.isReady || !this.rtcInstance) {
@@ -204,7 +399,7 @@ class XiaoiceManager {
     } catch (error) {
       console.error("Error starting RTC", "XiaoiceManager", error)
       this.debugLog(`Start error: ${error}`)
-      this.updateStatus("error")
+      this.handleInitializationError(error)
       return false
     }
   }
@@ -213,8 +408,12 @@ class XiaoiceManager {
    * Make avatar talk
    */
   public talk(message: string): boolean {
-    if (!this.isReady || !this.rtcInstance) {
-      console.warn("Cannot talk - RTC not ready", "XiaoiceManager")
+    if (!this.isReady || !this.rtcInstance || this.status !== "ready") {
+      console.warn("Cannot talk - RTC not ready", "XiaoiceManager", {
+        isReady: this.isReady,
+        hasInstance: !!this.rtcInstance,
+        status: this.status,
+      })
       return false
     }
 
@@ -224,6 +423,7 @@ class XiaoiceManager {
       return true
     } catch (error) {
       console.error("Error making avatar talk", "XiaoiceManager", error)
+      this.handleInitializationError(error)
       return false
     }
   }
@@ -232,7 +432,7 @@ class XiaoiceManager {
    * Make avatar ask a question
    */
   public ask(question: string): boolean {
-    if (!this.isReady || !this.rtcInstance) {
+    if (!this.isReady || !this.rtcInstance || this.status !== "ready") {
       console.warn("Cannot ask - RTC not ready", "XiaoiceManager")
       return false
     }
@@ -243,6 +443,7 @@ class XiaoiceManager {
       return true
     } catch (error) {
       console.error("Error making avatar ask", "XiaoiceManager", error)
+      this.handleInitializationError(error)
       return false
     }
   }
@@ -252,11 +453,16 @@ class XiaoiceManager {
    */
   public breakTalking(): boolean {
     if (!this.isReady || !this.rtcInstance) {
+      console.warn("Cannot break talking - RTC not ready", "XiaoiceManager")
       return false
     }
 
     try {
+      console.info("Breaking avatar talking", "XiaoiceManager")
       this.rtcInstance.breakTalking()
+      this.debugLog("Avatar talking interrupted")
+      // Manually update talking state since onTalkEnd might not be called
+      this.updateTalkingState(false)
       return true
     } catch (error) {
       console.error("Error breaking talking", "XiaoiceManager", error)
@@ -282,30 +488,20 @@ class XiaoiceManager {
   }
 
   /**
-   * Clean up resources
+   * Clean up resources (public method)
    */
   public cleanup(): void {
-    try {
-      if (this.rtcInstance) {
-        console.info("Destroying RTC instance", "XiaoiceManager")
-        this.rtcInstance.destroy()
-        this.rtcInstance = null
-      }
+    this.performCompleteCleanup()
+    this.updateStatus("offline")
+  }
 
-      if (this.asrInstance) {
-        this.asrInstance.stop()
-        this.asrInstance = null
-      }
-
-      if (typeof window !== "undefined") {
-        delete (window as any).xiaoiceInstance
-      }
-
-      this.isReady = false
-      this.updateStatus("offline")
-    } catch (error) {
-      console.error("Cleanup error", "XiaoiceManager", error)
-    }
+  /**
+   * Manual retry method for UI
+   */
+  public retry(): Promise<boolean> {
+    console.info("Manual retry requested", "XiaoiceManager")
+    this.retryCount = 0 // Reset retry count for manual retry
+    return this.startComplete()
   }
 
   /**
@@ -317,6 +513,18 @@ class XiaoiceManager {
 
     if (this.options?.onStatusChange) {
       this.options.onStatusChange(status)
+    }
+  }
+
+  /**
+   * Update talking state and notify listeners
+   */
+  private updateTalkingState(isTalking: boolean): void {
+    this.isTalking = isTalking
+    console.debug(`Avatar talking state changed to ${isTalking}`, "XiaoiceManager")
+
+    if (this.options?.onTalkingChange) {
+      this.options.onTalkingChange(isTalking)
     }
   }
 

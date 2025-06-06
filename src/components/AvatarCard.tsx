@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import xiaoiceManager, { type XiaoiceStatus } from "../utils/xiaoiceManager"
+import { useChatStore } from "../store/chatStore"
 import "./AvatarCard.scss"
 
 interface AvatarCardProps {
@@ -11,8 +12,8 @@ interface AvatarCardProps {
 const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
   const [avatarStatus, setAvatarStatus] = useState<XiaoiceStatus>("offline")
   const [debugInfo, setDebugInfo] = useState<string>("Click 'Start Avatar' to begin")
-  const avatarContainerRef = useRef<HTMLDivElement>(null)
   const [userStarted, setUserStarted] = useState(false)
+  const { setIsAvatarTalking } = useChatStore()
 
   useEffect(() => {
     // Initialize manager with options
@@ -22,48 +23,53 @@ const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
       mountSelector: ".xiaoice-avatar-mount",
       includeUI: false,
       showDefaultStaticImage: true,
-      highQuality: false,
+      highQuality: true,
       onStatusChange: (status) => {
         setAvatarStatus(status)
+        // Reset userStarted when going back to offline
+        if (status === "offline") {
+          setUserStarted(false)
+        }
       },
       onDebugInfo: (info) => {
         setDebugInfo(info)
       },
+      onTalkingChange: (isTalking) => {
+        // Update the chat store when avatar talking state changes
+        setIsAvatarTalking(isTalking)
+      },
     })
 
     return () => {
+      const mountElement = document.querySelector(".xiaoice-avatar-mount")
+      if (mountElement) {
+        mountElement.innerHTML = ""
+      }
       xiaoiceManager.cleanup()
     }
-  }, [])
+  }, [setIsAvatarTalking])
 
-  // Step 1: Initialize RTC
+  // Single click to go from offline to ready
   const handleStartAvatar = async () => {
-    if (userStarted || avatarStatus === "initializing") {
+    if (userStarted && avatarStatus === "initializing") {
       return
     }
 
-    console.info("User manually started avatar", "AvatarCard")
+    console.info("User started avatar - going directly to ready", "AvatarCard")
     setUserStarted(true)
-    await xiaoiceManager.startInitialization()
+    await xiaoiceManager.startComplete()
   }
 
-  // Step 2: Start RTC
-  const handleStartRTC = () => {
-    xiaoiceManager.startRTC()
-  }
-
-  const handleRetry = () => {
-    console.info("Retrying avatar initialization", "AvatarCard")
-    setUserStarted(false)
-    xiaoiceManager.cleanup()
+  const handleRetry = async () => {
+    console.info("User requested retry", "AvatarCard")
+    setUserStarted(true)
+    await xiaoiceManager.retry()
   }
 
   const getStatusColor = () => {
     switch (avatarStatus) {
       case "ready":
         return "#3ceec4"
-      case "initialized":
-        return "#ffa500"
       case "initializing":
         return "#ffa500"
       case "error":
@@ -77,10 +83,8 @@ const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
     switch (avatarStatus) {
       case "ready":
         return "Live"
-      case "initialized":
-        return "Ready"
       case "initializing":
-        return "Connecting..."
+        return "Starting..."
       case "error":
         return "Error"
       default:
@@ -119,55 +123,35 @@ const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
       </div>
 
       <div className="avatar-background">
-        <div className="xiaoice-avatar-container" ref={avatarContainerRef}>
-          <div className="xiaoice-avatar-mount"></div>
+        <div className="xiaoice-avatar-mount"></div>
 
-          {/* Show Start Button when offline */}
-          {!userStarted && avatarStatus === "offline" && (
-            <div className="avatar-overlay">
-              <div className="avatar-placeholder">
-                <div className="placeholder-text">Avatar Ready to Start</div>
-                <button className="start-avatar-button" onClick={handleStartAvatar}>
-                  Start Avatar
-                </button>
-              </div>
-            </div>
-          )}
+        {/* Show Start Button when offline - now as a full-card overlay */}
+        {!userStarted && avatarStatus === "offline" && (
+          <div className="full-card-overlay">
+            <div className="placeholder-text">Avatar Ready to Start</div>
+            <button className="start-avatar-button" onClick={handleStartAvatar}>
+              Start Avatar
+            </button>
+          </div>
+        )}
 
-          {/* Show loading when initializing */}
-          {userStarted && avatarStatus === "initializing" && (
-            <div className="avatar-overlay">
-              <div className="avatar-placeholder">
-                <div className="loading-spinner"></div>
-                <div className="placeholder-text">Initializing...</div>
-              </div>
-            </div>
-          )}
+        {/* Show loading when initializing */}
+        {userStarted && avatarStatus === "initializing" && (
+          <div className="full-card-overlay">
+            <div className="loading-spinner"></div>
+            <div className="placeholder-text">Starting Avatar...</div>
+          </div>
+        )}
 
-          {/* Show Start RTC button when initialized but not started */}
-          {userStarted && avatarStatus === "initialized" && (
-            <div className="avatar-overlay">
-              <div className="avatar-placeholder">
-                <div className="placeholder-text">RTC Initialized</div>
-                <button className="start-avatar-button" onClick={handleStartRTC}>
-                  Start RTC
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Show error state */}
-          {userStarted && avatarStatus === "error" && (
-            <div className="avatar-overlay">
-              <div className="avatar-placeholder error">
-                <div className="placeholder-text">Connection Failed</div>
-                <button className="retry-button" onClick={handleRetry}>
-                  Retry
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Show error state */}
+        {avatarStatus === "error" && (
+          <div className="full-card-overlay error">
+            <div className="placeholder-text">Connection Failed</div>
+            <button className="retry-button" onClick={handleRetry}>
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className="avatar-status">
           <div className="status-dot" style={{ backgroundColor: getStatusColor() }}></div>

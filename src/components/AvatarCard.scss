@@ -55,87 +55,84 @@
     min-height: 380px;
     position: relative;
     
-    // Xiaoice Avatar Container
-    .xiaoice-avatar-container {
+    // Direct SDK mount point - this is where Xiaoice will render
+    .xiaoice-avatar-mount {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      bottom: 20px;
+      z-index: 1;
+      border-radius: 15px;
+      overflow: hidden;
+      
+      // Zoom effect - scaled up to 1.4x
+      & > * {
+        transform: scale(1.4);
+        transform-origin: center 40%;
+        width: 100%;
+        height: 100%;
+      }
+    }
+
+    // React-controlled overlays
+    .avatar-overlay {
       position: absolute;
       top: 20px;
       left: 20px;
       right: 20px;
       bottom: 20px;
       z-index: 2;
+      pointer-events: auto;
       border-radius: 15px;
-      overflow: hidden;
-      background: rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
       
-      // SDK mount point - this is where Xiaoice will render
-      .xiaoice-avatar-mount {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 1;
-      }
-      
-      // React-controlled overlays
-      .avatar-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2;
-        pointer-events: auto;
+      // Avatar placeholder states
+      .avatar-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.5);
         
-        // Avatar placeholder states
-        .avatar-placeholder {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          color: #ffffff;
-          text-align: center;
-          background: rgba(0, 0, 0, 0.5);
+        &.error {
+          background: rgba(255, 68, 68, 0.2);
+          border: 1px solid rgba(255, 68, 68, 0.3);
+        }
+        
+        .placeholder-text {
+          font-size: 16px;
+          margin-bottom: 10px;
+          opacity: 0.9;
+        }
+        
+        .loading-spinner {
+          width: 40px;
+          height: 40px;
+          border: 3px solid rgba(60, 238, 196, 0.3);
+          border-top: 3px solid #3ceec4;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin-bottom: 15px;
+        }
+        
+        .retry-button {
+          background: #3ceec4;
+          color: #111111;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 20px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          transition: all 0.2s ease;
           
-          &.error {
-            background: rgba(255, 68, 68, 0.2);
-            border: 1px solid rgba(255, 68, 68, 0.3);
-          }
-          
-          .placeholder-text {
-            font-size: 16px;
-            margin-bottom: 10px;
-            opacity: 0.9;
-          }
-          
-          .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(60, 238, 196, 0.3);
-            border-top: 3px solid #3ceec4;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
-          }
-          
-          .retry-button {
-            background: #3ceec4;
-            color: #111111;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            
-            &:hover {
-              background: #2dd4aa;
-              transform: translateY(-1px);
-            }
+          &:hover {
+            background: #2dd4aa;
+            transform: translateY(-1px);
           }
         }
       }
@@ -152,7 +149,7 @@
       background: rgba(0, 0, 0, 0.7);
       padding: 6px 12px;
       border-radius: 20px;
-      z-index: 3;
+      z-index: 11;
       
       .status-dot {
         width: 8px;
@@ -185,6 +182,93 @@
       overflow-y: auto;
     }
   }
+
+  // Full card overlay that covers the entire card
+  .full-card-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    color: #ffffff;
+    text-align: center;
+    padding: 20px;
+    
+    &.error {
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(255, 68, 68, 0.3);
+      
+      .placeholder-text {
+        color: #ff6b6b;
+      }
+    }
+    
+    .placeholder-text {
+      font-size: 18px;
+      margin-bottom: 20px;
+      opacity: 0.9;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(60, 238, 196, 0.3);
+      border-top: 3px solid #3ceec4;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    
+    .start-avatar-button {
+      background: #4A4A4A;
+      border: 1px solid #4A4A4A;
+      color: #ffffff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      padding: 10px 24px;
+      border-radius: 64px;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        color: #3ceec4;
+        background-color: rgba(60, 238, 196, 0.1);
+        border-color: rgba(60, 238, 196, 0.3);
+      }
+      
+      &:active {
+        transform: translateY(1px);
+      }
+    }
+    
+    .retry-button {
+      background: #4A4A4A;
+      border: 1px solid #4A4A4A;
+      color: #ffffff;
+      cursor: pointer;
+      padding: 10px 24px;
+      border-radius: 64px;
+      font-size: 16px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        color: #3ceec4;
+        background-color: rgba(60, 238, 196, 0.1);
+        border-color: rgba(60, 238, 196, 0.3);
+      }
+    }
+  }
   
   .avatar-info {
     padding: 15px 20px;
@@ -214,25 +298,29 @@
     }
 
     .start-avatar-button {
-      background: #3ceec4;
-      color: #111111;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 25px;
+      background: #4A4A4A;
+      border: 1px solid #4A4A4A;
+      color: #ffffff;
       cursor: pointer;
-      font-size: 16px;
-      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 64px;
       transition: all 0.2s ease;
       margin-top: 15px;
       
       &:hover {
-        background: #2dd4aa;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(60, 238, 196, 0.3);
+        color: #3ceec4;
+        background-color: rgba(60, 238, 196, 0.1);
+        border-color: rgba(60, 238, 196, 0.3);
       }
       
       &:active {
-        transform: translateY(0);
+        transform: translateY(1px);
       }
     }
   }
