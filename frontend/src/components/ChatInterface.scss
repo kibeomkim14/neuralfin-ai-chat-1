@@ -1,10 +1,16 @@
 .chat-interface {
-  width: 71.43%; /* 5/7 of total width (2:5 ratio) */
+  width: 71.43%; /* 5/7 of total width when avatar is shown */
   display: flex;
   flex-direction: column;
   background-color: #262626;
   border-radius: 20px;
   overflow: hidden;
+  transition: width 0.3s ease; /* Smooth transition for width changes */
+  
+  /* When avatar is hidden, expand to full width */
+  &.full-width {
+    width: 100%;
+  }
   
   .chat-header {
     display: flex;
@@ -72,5 +78,30 @@
       text-align: center;
       margin-bottom: 40px;
     }
+  }
+}
+
+.see-avatar-button {
+  background: #4A4A4A;
+  border: 1px solid #4A4A4A;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 64px;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    color: #3ceec4;
+    background-color: rgba(60, 238, 196, 0.1);
+    border-color: rgba(60, 238, 196, 0.3);
+  }
+  
+  svg {
+    width: 16px;
+    height: 16px;
   }
 }

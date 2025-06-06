@@ -16,7 +16,7 @@ const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
   const { setIsAvatarTalking } = useChatStore()
 
   useEffect(() => {
-    // Initialize manager with options
+    // Initialize manager with options only once
     xiaoiceManager.init({
       subscriptionKey: process.env.NEXT_PUBLIC_XIAOICE_SUBSCRIPTION_KEY || "",
       projectId: process.env.NEXT_PUBLIC_XIAOICE_PROJECT_ID || "",
@@ -40,12 +40,21 @@ const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
       },
     })
 
+    // Check if avatar was already initialized
+    const currentStatus = xiaoiceManager.getStatus()
+    setAvatarStatus(currentStatus)
+    if (currentStatus === "ready") {
+      setUserStarted(true)
+      setDebugInfo("Avatar is ready")
+    }
+
+    // DON'T cleanup when component unmounts - just clear the mount element
     return () => {
       const mountElement = document.querySelector(".xiaoice-avatar-mount")
       if (mountElement) {
         mountElement.innerHTML = ""
       }
-      xiaoiceManager.cleanup()
+      // DON'T call xiaoiceManager.cleanup() here!
     }
   }, [setIsAvatarTalking])
 

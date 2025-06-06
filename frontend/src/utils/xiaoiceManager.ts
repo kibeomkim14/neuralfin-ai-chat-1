@@ -3,7 +3,6 @@
  * Based on the official demo code with enhanced error handling
  */
 
-
 interface XiaoiceOptions {
   subscriptionKey: string
   projectId: string
@@ -35,6 +34,7 @@ class XiaoiceManager {
     hotword_list: [],
     engine_model_type: "",
   }
+  private isCleaningUp = false // Prevent recursive cleanup calls
 
   constructor() {
     // Make methods available globally
@@ -57,6 +57,7 @@ class XiaoiceManager {
     this.signature = ""
     this.lastSignatureTime = 0
     this.retryCount = 0
+    this.isCleaningUp = false
 
     console.info("Xiaoice manager initialized with options", "XiaoiceManager", options)
     this.updateStatus("offline")
@@ -138,6 +139,14 @@ class XiaoiceManager {
    * Perform complete cleanup of all resources
    */
   private performCompleteCleanup(): void {
+    // Prevent recursive cleanup calls
+    if (this.isCleaningUp) {
+      console.warn("Cleanup already in progress, skipping", "XiaoiceManager")
+      return
+    }
+
+    this.isCleaningUp = true
+
     try {
       this.debugLog("Performing complete cleanup...")
 
@@ -147,15 +156,19 @@ class XiaoiceManager {
         this.initializationTimeout = null
       }
 
+      // Reset state first to prevent callbacks from triggering more cleanup
+      this.isReady = false
+      this.updateTalkingState(false)
+
       // Destroy RTC instance with all methods
       if (this.rtcInstance) {
         try {
           // Try multiple cleanup methods to ensure complete destruction
-          if (typeof this.rtcInstance.endRTC === "function") {
-            this.rtcInstance.endRTC()
-          }
           if (typeof this.rtcInstance.breakTalking === "function") {
             this.rtcInstance.breakTalking()
+          }
+          if (typeof this.rtcInstance.endRTC === "function") {
+            this.rtcInstance.endRTC()
           }
           if (typeof this.rtcInstance.destroy === "function") {
             this.rtcInstance.destroy()
@@ -191,13 +204,11 @@ class XiaoiceManager {
         delete (window as any).xiaoiceIsTalking
       }
 
-      // Reset all state
-      this.isReady = false
-      this.updateTalkingState(false)
-
       this.debugLog("Complete cleanup finished")
     } catch (error) {
       console.error("Error during complete cleanup", "XiaoiceManager", error)
+    } finally {
+      this.isCleaningUp = false
     }
   }
 
@@ -301,8 +312,8 @@ class XiaoiceManager {
         onStopStream: () => {
           console.info("Avatar stream stopped", "XiaoiceManager")
           this.debugLog("Stream stopped")
-          if (this.status === "ready") {
-            // If we were ready and stream stopped unexpectedly, it's an error
+          // Only treat as error if we're not already cleaning up and we were ready
+          if (this.status === "ready" && !this.isCleaningUp) {
             this.handleInitializationError(new Error("Stream stopped unexpectedly"))
           }
         },
@@ -342,6 +353,12 @@ class XiaoiceManager {
    * Handle initialization errors with retry logic
    */
   private handleInitializationError(error: any): void {
+    // Prevent recursive error handling during cleanup
+    if (this.isCleaningUp) {
+      console.warn("Error handling skipped during cleanup", "XiaoiceManager", error)
+      return
+    }
+
     console.error("Initialization error", "XiaoiceManager", error)
 
     // Clear initialization timeout

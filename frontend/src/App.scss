@@ -39,4 +39,10 @@ body {
   flex: 1;
   padding: 20px;
   gap: 0; /* Removed gap between avatar card and chat interface */
+  transition: all 0.3s ease; /* Smooth transition for layout changes */
+  
+  /* When avatar is hidden, remove any potential gaps */
+  &.avatar-hidden {
+    gap: 0;
+  }
 }
