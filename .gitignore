@@ -5,6 +5,7 @@ frontend/.next/
 frontend/coverage/
 .DS_Store
 frontend/.env.local
+.next 
 
 # Logs
 logs

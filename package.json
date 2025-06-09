@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "install:all": "pnpm install && cd frontend && pnpm install && cd ../backend && ./setup.sh",
+    "install:all": "pnpm install && cd frontend && pnpm install && cd ../backend && node ../run-script.js backend-setup",
     "dev:frontend": "cd frontend && pnpm dev",
-    "dev:backend": "cd backend && ./start.sh",
+    "dev:backend": "node run-script.js backend-start",
     "dev": "concurrently \"pnpm dev:frontend\" \"pnpm dev:backend\"",
     "build": "cd frontend && pnpm build",
     "start": "cd frontend && pnpm start"
