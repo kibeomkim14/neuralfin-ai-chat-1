@@ -3,10 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any
-import openai
+from openai import OpenAI
 import os
 import json
-import asyncio
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -24,7 +23,7 @@ app.add_middleware(
 )
 
 # Initialize OpenAI client
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 class Message(BaseModel):
     role: str
@@ -48,6 +47,7 @@ async def health_check():
 async def generate_streaming_response(messages: List[Dict[str, str]]):
     """Generate streaming response from OpenAI"""
     try:
+        print("Generating streaming response for messages:", messages)  # Debug log
         # System prompt for Sandra
         system_prompt = """You are Sandra, a professional financial advisor from DL Family Office. You provide expert financial advice with a focus on:
         - Portfolio management and asset allocation
@@ -63,8 +63,8 @@ async def generate_streaming_response(messages: List[Dict[str, str]]):
         openai_messages = [{"role": "system", "content": system_prompt}]
         openai_messages.extend([{"role": msg["role"], "content": msg["content"]} for msg in messages])
         
-        # Create streaming response
-        response = openai.ChatCompletion.create(
+        # Create streaming response using new API
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=openai_messages,
             stream=True,
@@ -73,7 +73,7 @@ async def generate_streaming_response(messages: List[Dict[str, str]]):
         )
         
         for chunk in response:
-            if chunk.choices[0].delta.get("content"):
+            if chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
                 # Format as Server-Sent Events
                 yield f"data: {json.dumps({'type': 'text-delta', 'textDelta': content})}\n\n"
@@ -81,13 +81,16 @@ async def generate_streaming_response(messages: List[Dict[str, str]]):
         yield f"data: {json.dumps({'type': 'finish'})}\n\n"
         
     except Exception as e:
+        print("Error in generate_streaming_response:", str(e))  # Debug log
         yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
 
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
     """Stream chat responses from OpenAI"""
     try:
+        print("Received chat request:", request)  # Debug log
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        print("Processed messages:", messages)  # Debug log
         
         return StreamingResponse(
             generate_streaming_response(messages),
@@ -99,6 +102,7 @@ async def chat_stream(request: ChatRequest):
             }
         )
     except Exception as e:
+        print("Error in chat_stream:", str(e))  # Debug log
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat")
@@ -123,8 +127,8 @@ async def chat_completion(request: ChatRequest):
         openai_messages = [{"role": "system", "content": system_prompt}]
         openai_messages.extend([{"role": msg.role, "content": msg.content} for msg in request.messages])
         
-        # Get response from OpenAI
-        response = openai.ChatCompletion.create(
+        # Get response from OpenAI using new API
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=openai_messages,
             max_tokens=1000,
@@ -137,6 +141,7 @@ async def chat_completion(request: ChatRequest):
         return ChatResponse(content=content, thinking_duration=thinking_duration)
         
     except Exception as e:
+        print("Error in chat_completion:", str(e))  # Debug log
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
