@@ -137,9 +137,9 @@ const AvatarCard = ({ onToggleAvatar }: AvatarCardProps) => {
         {/* Show Start Button when offline - now as a full-card overlay */}
         {!userStarted && avatarStatus === "offline" && (
           <div className="full-card-overlay">
-            <div className="placeholder-text">Avatar Ready to Start</div>
+            <div className="placeholder-text">AI Advisor Ready to Start!</div>
             <button className="start-avatar-button" onClick={handleStartAvatar}>
-              Start Avatar
+              Start AI Advisor Chat
             </button>
           </div>
         )}
